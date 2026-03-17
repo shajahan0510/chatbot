@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Groq AI Chat (Backend)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --bg-secondary: #12121a;
+      --fg: #e8e8ed;
+      --muted: #6b6b7a;
+      --accent: #00d9a0;
+      --accent-dim: rgba(0, 217, 160, 0.15);
+      --card: rgba(18, 18, 26, 0.8);
+      --border: rgba(255, 255, 255, 0.08);
+      --glow: rgba(0, 217, 160, 0.4);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+    }
+
+    body {
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Animated background */
+    .bg-animated {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+    }
+
+    .bg-animated::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: 
+        radial-gradient(ellipse 600px 600px at 20% 20%, rgba(0, 217, 160, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 500px 500px at 80% 80%, rgba(0, 150, 217, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 400px 400px at 60% 30%, rgba(120, 0, 217, 0.06) 0%, transparent 50%);
+      animation: bgDrift 30s ease-in-out infinite;
+    }
+
+    @keyframes bgDrift {
+      0%, 100% { transform: translate(0, 0) rotate(0deg); }
+      25% { transform: translate(2%, 2%) rotate(1deg); }
+      50% { transform: translate(-1%, 3%) rotate(-1deg); }
+      75% { transform: translate(1%, -2%) rotate(0.5deg); }
+    }
+
+    /* Grid pattern overlay */
+    .grid-pattern {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black, transparent);
+    }
+
+    /* Glass card */
+    .glass {
+      background: var(--card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+    }
+
+    /* Custom scrollbar */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: var(--muted);
+    }
+
+    /* Message animations */
+    @keyframes messageSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes messageSlideInUser {
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes messageSlideInBot {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .message-enter {
+      animation: messageSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .message-user {
+      animation: messageSlideInUser 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .message-bot {
+      animation: messageSlideInBot 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Typing indicator */
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+
+    .typing-dot {
+      animation: typingBounce 1.4s ease-in-out infinite;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    /* Pulse glow */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 var(--glow); }
+      50% { box-shadow: 0 0 20px 5px var(--glow); }
+    }
+
+    .pulse-glow {
+      animation: pulseGlow 2s ease-in-out infinite;
+    }
+
+    /* Button hover effect */
+    .btn-primary {
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent, rgba(255,255,255,0.1), transparent);
+      transform: translateX(-100%);
+      transition: transform 0.5s ease;
+    }
+
+    .btn-primary:hover::before {
+      transform: translateX(100%);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    /* Input focus */
+    .input-focus {
+      transition: all 0.3s ease;
+    }
+
+    .input-focus:focus {
+      box-shadow: 0 0 0 2px var(--accent-dim), 0 0 30px -10px var(--accent);
+    }
+
+    /* Code block */
+    .code-block {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    /* Logo animation */
+    @keyframes logoFloat {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-5px) rotate(2deg); }
+    }
+
+    .logo-float {
+      animation: logoFloat 4s ease-in-out infinite;
+    }
+
+    /* Entrance animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-in {
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .delay-100 { animation-delay: 0.1s; }
+    .delay-200 { animation-delay: 0.2s; }
+    .delay-300 { animation-delay: 0.3s; }
+    .delay-400 { animation-delay: 0.4s; }
+
+    /* Settings panel */
+    .settings-panel {
+      transform: translateX(100%);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .settings-panel.open {
+      transform: translateX(0);
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Focus visible */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <!-- Animated Background -->
+  <div class="bg-animated"></div>
+  <div class="grid-pattern"></div>
+
+  <!-- Main Container -->
+  <div class="min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="glass border-b border-white/5 sticky top-0 z-50">
+      <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3 opacity-0 animate-in">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#00d9a0] to-[#00a8d9] flex items-center justify-center logo-float">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-black">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="font-semibold text-lg tracking-tight">Groq Chat</h1>
+            <p class="text-xs text-[var(--muted)]">Server-Secure Mode</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 opacity-0 animate-in delay-100">
+          <!-- Model Selector -->
+          <div class="relative">
+            <select id="modelSelect" class="appearance-none bg-white/5 border border-white/10 rounded-lg px-4 py-2 pr-10 text-sm cursor-pointer hover:bg-white/10 transition-colors input-focus" aria-label="Select AI model">
+              <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+              <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+              <option value="mixtral-8x7b-32768">Mixtral 8x7B</option>
+              <option value="gemma2-9b-it">Gemma 2 9B</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)] pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+
+          <!-- Settings Button -->
+          <button id="settingsBtn" class="p-2.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors" aria-label="Open settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Chat Container -->
+    <main class="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4">
+      <!-- Messages Area -->
+      <div id="chatContainer" class="flex-1 overflow-y-auto custom-scroll py-6 space-y-4">
+        <!-- Welcome Message -->
+        <div id="welcomeMessage" class="flex flex-col items-center justify-center py-20 text-center opacity-0 animate-in delay-200">
+          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#00d9a0]/20 to-[#00a8d9]/20 border border-white/10 flex items-center justify-center mb-6 pulse-glow">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-semibold mb-2">Secure Connection Ready</h2>
+          <p class="text-[var(--muted)] max-w-md mb-8">
+            Connected to your local backend. Your API key is secure.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl">
+            <button class="suggestion-btn glass rounded-xl p-4 text-left hover:bg-white/5 transition-colors group" data-prompt="Explain quantum computing in simple terms">
+              <div class="text-sm font-medium mb-1 group-hover:text-[var(--accent)] transition-colors">Quantum Computing</div>
+              <div class="text-xs text-[var(--muted)]">Explain it simply</div>
+            </button>
+            <button class="suggestion-btn glass rounded-xl p-4 text-left hover:bg-white/5 transition-colors group" data-prompt="Write a Python function to sort a list">
+              <div class="text-sm font-medium mb-1 group-hover:text-[var(--accent)] transition-colors">Code Helper</div>
+              <div class="text-xs text-[var(--muted)]">Sort a list in Python</div>
+            </button>
+            <button class="suggestion-btn glass rounded-xl p-4 text-left hover:bg-white/5 transition-colors group" data-prompt="Give me 5 creative startup ideas">
+              <div class="text-sm font-medium mb-1 group-hover:text-[var(--accent)] transition-colors">Brainstorm</div>
+              <div class="text-xs text-[var(--muted)]">Creative startup ideas</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Messages will be inserted here -->
+        <div id="messagesContainer"></div>
+
+        <!-- Typing Indicator -->
+        <div id="typingIndicator" class="hidden message-bot">
+          <div class="flex gap-3 max-w-3xl">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00d9a0] to-[#00a8d9] flex items-center justify-center flex-shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-black">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <div class="glass rounded-2xl rounded-tl-md px-4 py-3">
+              <div class="flex gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-[var(--accent)] typing-dot"></div>
+                <div class="w-2 h-2 rounded-full bg-[var(--accent)] typing-dot"></div>
+                <div class="w-2 h-2 rounded-full bg-[var(--accent)] typing-dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="py-4 border-t border-white/5 opacity-0 animate-in delay-300">
+        <form id="chatForm" class="flex gap-3">
+          <div class="flex-1 relative">
+            <textarea 
+              id="messageInput" 
+              class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 resize-none input-focus placeholder:text-[var(--muted)] text-sm"
+              placeholder="Type your message..."
+              rows="1"
+              aria-label="Message input"
+            ></textarea>
+            <div class="absolute right-3 bottom-3 text-xs text-[var(--muted)]">
+              <kbd class="px-1.5 py-0.5 rounded bg-white/10 text-[10px]">Enter</kbd> to send
+            </div>
+          </div>
+          <button 
+            type="submit" 
+            id="sendBtn"
+            class="btn-primary px-6 py-3 rounded-xl bg-gradient-to-r from-[#00d9a0] to-[#00a8d9] text-black font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </form>
+        <p class="text-xs text-[var(--muted)] mt-3 text-center">
+          Running on Local Backend (localhost:3000)
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings Panel -->
+  <div id="settingsOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden" aria-hidden="true"></div>
+  <aside id="settingsPanel" class="settings-panel fixed right-0 top-0 h-full w-full max-w-md glass border-l border-white/10 z-50 overflow-y-auto custom-scroll" aria-label="Settings panel">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="text-xl font-semibold">Settings</h2>
+        <button id="closeSettings" class="p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Close settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- REMOVED API KEY SECTION - Now handled by backend -->
+
+      <!-- System Prompt -->
+      <div class="space-y-4 mb-8">
+        <div>
+          <label for="systemPrompt" class="block text-sm font-medium mb-2">System Prompt</label>
+          <textarea 
+            id="systemPrompt" 
+            class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 resize-none input-focus text-sm h-32"
+            placeholder="You are a helpful assistant..."
+          >You are a helpful, harmless, and honest AI assistant. You provide clear, accurate, and thoughtful responses. When writing code, you include helpful comments and follow best practices.</textarea>
+        </div>
+      </div>
+
+      <!-- Temperature Slider -->
+      <div class="space-y-4 mb-8">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label for="temperatureSlider" class="text-sm font-medium">Temperature</label>
+            <span id="temperatureValue" class="text-sm text-[var(--accent)] font-mono">0.7</span>
+          </div>
+          <input 
+            type="range" 
+            id="temperatureSlider" 
+            class="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+            min="0"
+            max="2"
+            step="0.1"
+            value="0.7"
+          >
+          <div class="flex justify-between text-xs text-[var(--muted)] mt-1">
+            <span>Precise</span>
+            <span>Creative</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clear Chat -->
+      <div class="pt-6 border-t border-white/10">
+        <button id="clearChat" class="w-full py-3 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm font-medium">
+          Clear Chat History
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    // Initialize state
+    let messages = [];
+    let isGenerating = false;
+
+    // DOM Elements
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = document.getElementById('messageInput');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const welcomeMessage = document.getElementById('welcomeMessage');
+    const sendBtn = document.getElementById('sendBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+    const closeSettings = document.getElementById('closeSettings');
+    const modelSelect = document.getElementById('modelSelect');
+    const systemPrompt = document.getElementById('systemPrompt');
+    const temperatureSlider = document.getElementById('temperatureSlider');
+    const temperatureValue = document.getElementById('temperatureValue');
+    const clearChatBtn = document.getElementById('clearChat');
+    const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+
+    // Initialize
+    function init() {
+      // Auto-resize textarea
+      messageInput.addEventListener('input', () => {
+        messageInput.style.height = 'auto';
+        messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+        // Only check for text content, not API key (key is in backend)
+        sendBtn.disabled = !messageInput.value.trim();
+      });
+    }
+
+    // Settings panel toggle
+    function openSettings() {
+      settingsPanel.classList.add('open');
+      settingsOverlay.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeSettingsPanel() {
+      settingsPanel.classList.remove('open');
+      settingsOverlay.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    settingsBtn.addEventListener('click', openSettings);
+    closeSettings.addEventListener('click', closeSettingsPanel);
+    settingsOverlay.addEventListener('click', closeSettingsPanel);
+
+    // Temperature slider
+    temperatureSlider.addEventListener('input', () => {
+      temperatureValue.textContent = temperatureSlider.value;
+    });
+
+    // Clear chat
+    clearChatBtn.addEventListener('click', () => {
+      messages = [];
+      messagesContainer.innerHTML = '';
+      welcomeMessage.style.display = 'flex';
+      closeSettingsPanel();
+    });
+
+    // Suggestion buttons
+    suggestionBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const prompt = btn.dataset.prompt;
+        messageInput.value = prompt;
+        messageInput.dispatchEvent(new Event('input'));
+        chatForm.dispatchEvent(new Event('submit'));
+      });
+    });
+
+    // Handle form submit
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const content = messageInput.value.trim();
+      if (!content || isGenerating) return;
+
+      // Hide welcome message
+      welcomeMessage.style.display = 'none';
+
+      // Add user message
+      addMessage('user', content);
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      sendBtn.disabled = true;
+
+      // Show typing indicator
+      isGenerating = true;
+      typingIndicator.classList.remove('hidden');
+      scrollToBottom();
+
+      try {
+        const response = await callGroqAPI(content);
+        typingIndicator.classList.add('hidden');
+        addMessage('assistant', response);
+      } catch (error) {
+        typingIndicator.classList.add('hidden');
+        addMessage('assistant', `Error: ${error.message}`, true);
+      }
+
+      isGenerating = false;
+    });
+
+    // Handle Enter key
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        chatForm.dispatchEvent(new Event('submit'));
+      }
+    });
+
+    // Add message to UI
+    function addMessage(role, content, isError = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex gap-3 max-w-3xl ${role === 'user' ? 'ml-auto flex-row-reverse' : ''}`;
+
+      const formattedContent = role === 'assistant' ? formatMessage(content) : escapeHtml(content);
+
+      messageDiv.innerHTML = `
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${role === 'user' ? 'bg-white/10' : 'bg-gradient-to-br from-[#00d9a0] to-[#00a8d9]'}">
+          ${role === 'user' ? `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          ` : `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-black">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+          `}
+        </div>
+        <div class="${role === 'user' ? 'bg-[var(--accent)]/20' : 'glass'} ${isError ? 'border-red-500/30 bg-red-500/10' : ''} rounded-2xl ${role === 'user' ? 'rounded-tr-md' : 'rounded-tl-md'} px-4 py-3 max-w-[85%] ${role === 'user' ? 'message-user' : 'message-bot'}">
+          <div class="text-sm leading-relaxed prose prose-invert prose-sm max-w-none ${role === 'assistant' ? '[&_code]:text-[var(--accent)]' : ''}">
+            ${formattedContent}
+          </div>
+        </div>
+      `;
+
+      messagesContainer.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Format message with markdown-like syntax
+    function formatMessage(text) {
+      let formatted = escapeHtml(text);
+
+      // Code blocks
+      formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block my-3"><code>$2</code></pre>');
+
+      // Inline code
+      formatted = formatted.replace(/`([^`]+)`/g, '<code class="bg-white/10 px-1.5 py-0.5 rounded text-[var(--accent)]">$1</code>');
+
+      // Bold
+      formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+      // Italic
+      formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+      // Line breaks
+      formatted = formatted.replace(/\n/g, '<br>');
+
+      return formatted;
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---------------------------------------------------------
+    // UPDATED: Call Local Backend instead of Groq directly
+    // ---------------------------------------------------------
+    async function callGroqAPI(userMessage) {
+      // Add to messages array
+      messages.push({ role: 'user', content: userMessage });
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: messages,
+          model: modelSelect.value,
+          temperature: parseFloat(temperatureSlider.value),
+          systemPrompt: systemPrompt.value
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      const assistantMessage = data.message || 'No response generated';
+
+      // Add to messages array
+      messages.push({ role: 'assistant', content: assistantMessage });
+
+      return assistantMessage;
+    }
+
+    // Scroll to bottom
+    function scrollToBottom() {
+      const chatContainer = document.getElementById('chatContainer');
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Initialize app
+    init();
+  </script>
+</body>
+</html>
